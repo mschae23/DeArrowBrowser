@@ -46,7 +46,7 @@ body {
 #searchbar {
   display: flex;
   flex-direction: row;
-  justify-content: space-evenly;
+  gap: 1rem;
   
   > div {
     display: flex;
@@ -171,9 +171,4 @@ input, textarea {
 
 input::placeholder, textarea::placeholder {
   color: #5a5a5a;
-}
-
-.icon-link {
-  margin-left: 0.5rem;
-  margin-right: 0.5rem;
 }

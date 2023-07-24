@@ -140,7 +140,9 @@ impl Display for ParseError {
 
 pub struct DearrowDB {
     pub titles: HashMap<Arc<str>, Title>,
+    pub titles_by_time_submitted: Vec<Title>,
     pub thumbnails: HashMap<Arc<str>, Thumbnail>,
+    pub thumbnails_by_time_submitted: Vec<Thumbnail>,
 }
 
 pub type LoadResult = (DearrowDB, Vec<Error>);
@@ -201,6 +203,8 @@ impl DearrowDB {
             .map(|thumb| (thumb.uuid.clone(), thumb))
             .collect();
 
+        let mut thumbnails_by_time_submitted = Vec::with_capacity(thumbnail_votes.len());
+
         // Load the Thumbnail objects while deduplicating strings and merging them with other Thumbnail* objects
         let thumbnails: HashMap<Arc<str>, Thumbnail> = csv::Reader::from_path(thumbnails_path)
             .context("Could not initialize csv reader for thumbnails")?
@@ -217,7 +221,10 @@ impl DearrowDB {
                         }
                     };
                     match thumb.try_merge(timestamp, votes) {
-                        Ok(t) => Some(t),
+                        Ok(t) => {
+                            thumbnails_by_time_submitted.push(t.clone());
+                            Some(t)
+                        },
                         Err(e) => {
                             errors.push(e.into());
                             None
@@ -251,6 +258,9 @@ impl DearrowDB {
             })
             .map(|title| (title.uuid.clone(), title))
             .collect();
+
+        let mut titles_by_time_submitted = Vec::with_capacity(title_votes.len());
+
         let titles: HashMap<Arc<str>, Title> = csv::Reader::from_path(titles_path)
             .context("Could not initialize csv reader for titles")?
             .into_deserialize::<csv_data::Title>()
@@ -265,7 +275,10 @@ impl DearrowDB {
                         }
                     };
                     match title.try_merge(votes) {
-                        Ok(t) => Some(t),
+                        Ok(t) => {
+                            titles_by_time_submitted.push(t.clone());
+                            Some(t)
+                        },
                         Err(e) => {
                             errors.push(e.into());
                             None
@@ -282,7 +295,7 @@ impl DearrowDB {
 
         drop(title_votes);
 
-        Ok((DearrowDB {titles, thumbnails}, errors))
+        Ok((DearrowDB {titles, titles_by_time_submitted, thumbnails, thumbnails_by_time_submitted}, errors))
     }
 }
 

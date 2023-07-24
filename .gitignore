@@ -1,2 +1,12 @@
-/target
+# Rust
+**/target/
+
+# Cargo
+
+# IntelliJ IDEA
+.idea/
+**.iml
+
+# Runtime data
+**/dist/
 config.toml

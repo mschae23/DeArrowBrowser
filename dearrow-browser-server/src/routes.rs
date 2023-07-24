@@ -108,7 +108,7 @@ async fn get_errors(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonResult<Err
 async fn get_random_titles(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonResult<Vec<ApiTitle>> {
     Ok(web::Json(
         db_lock.read().map_err(|_| anyhow!("Failed to acquire DatabaseState for reading"))?
-            .db.titles.values().take(20)
+            .db.titles_by_time_submitted.iter().rev().take(20)
             .map(Into::into).collect()
     ))
 }
@@ -127,7 +127,7 @@ async fn get_title_by_uuid(db_lock: web::Data<RwLock<DatabaseState>>, path: web:
 async fn get_titles_by_video_id(db_lock: web::Data<RwLock<DatabaseState>>, string_set: web::Data<RwLock<StringSet>>, path: web::Path<String>) -> CustomizedJsonResult<Vec<ApiTitle>> {
     let video_id = string_set.read().map_err(|_| anyhow!("Failed to acquire StringSet for reading"))?
         .set.get(path.into_inner().as_str()).cloned();
-    let titles = match video_id {
+    let mut titles: Vec<ApiTitle> = match video_id {
         None => vec![],
         Some(id) => db_lock.read().map_err(|_| anyhow!("Failed to acquire DatabaseState for reading"))?
             .db.titles.values()
@@ -140,6 +140,7 @@ async fn get_titles_by_video_id(db_lock: web::Data<RwLock<DatabaseState>>, strin
     } else {
         StatusCode::OK
     };
+    titles.sort_by(|t1, t2| t1.time_submitted.cmp(&t2.time_submitted).reverse());
     Ok(web::Json(titles).customize().with_status(status))
 }
 
@@ -147,7 +148,7 @@ async fn get_titles_by_video_id(db_lock: web::Data<RwLock<DatabaseState>>, strin
 async fn get_titles_by_user_id(db_lock: web::Data<RwLock<DatabaseState>>, string_set: web::Data<RwLock<StringSet>>, path: web::Path<String>) -> CustomizedJsonResult<Vec<ApiTitle>> {
     let user_id = string_set.read().map_err(|_| anyhow!("Failed to acquire StringSet for reading"))?
         .set.get(path.into_inner().as_str()).cloned();
-    let titles = match user_id {
+    let mut titles: Vec<ApiTitle> = match user_id {
         None => vec![],
         Some(id) => db_lock.read().map_err(|_| anyhow!("Failed to acquire DatabaseState for reading"))?
             .db.titles.values()
@@ -160,6 +161,7 @@ async fn get_titles_by_user_id(db_lock: web::Data<RwLock<DatabaseState>>, string
     } else {
         StatusCode::OK
     };
+    titles.sort_by(|t1, t2| t1.time_submitted.cmp(&t2.time_submitted).reverse());
     Ok(web::Json(titles).customize().with_status(status))
 }
 
@@ -167,7 +169,7 @@ async fn get_titles_by_user_id(db_lock: web::Data<RwLock<DatabaseState>>, string
 async fn get_random_thumbnails(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonResult<Vec<ApiThumbnail>> {
     Ok(web::Json(
         db_lock.read().map_err(|_| anyhow!("Failed to acquire DatabaseState for reading"))?
-            .db.thumbnails.values().take(20)
+            .db.thumbnails_by_time_submitted.iter().rev().take(20)
             .map(Into::into).collect()
     ))
 }
@@ -186,7 +188,7 @@ async fn get_thumbnail_by_uuid(db_lock: web::Data<RwLock<DatabaseState>>, path: 
 async fn get_thumbnails_by_video_id(db_lock: web::Data<RwLock<DatabaseState>>, string_set: web::Data<RwLock<StringSet>>, path: web::Path<String>) -> CustomizedJsonResult<Vec<ApiThumbnail>> {
     let video_id = string_set.read().map_err(|_| anyhow!("Failed to acquire StringSet for reading"))?
         .set.get(path.into_inner().as_str()).cloned();
-    let titles = match video_id {
+    let mut titles: Vec<ApiThumbnail> = match video_id {
         None => vec![],
         Some(id) => db_lock.read().map_err(|_| anyhow!("Failed to acquire DatabaseState for reading"))?
             .db.thumbnails.values()
@@ -199,6 +201,7 @@ async fn get_thumbnails_by_video_id(db_lock: web::Data<RwLock<DatabaseState>>, s
     } else {
         StatusCode::OK
     };
+    titles.sort_by(|t1, t2| t1.time_submitted.cmp(&t2.time_submitted).reverse());
     Ok(web::Json(titles).customize().with_status(status))
 }
 
@@ -206,7 +209,7 @@ async fn get_thumbnails_by_video_id(db_lock: web::Data<RwLock<DatabaseState>>, s
 async fn get_thumbnails_by_user_id(db_lock: web::Data<RwLock<DatabaseState>>, string_set: web::Data<RwLock<StringSet>>, path: web::Path<String>) -> CustomizedJsonResult<Vec<ApiThumbnail>> {
     let user_id = string_set.read().map_err(|_| anyhow!("Failed to acquire StringSet for reading"))?
         .set.get(path.into_inner().as_str()).cloned();
-    let titles = match user_id {
+    let mut titles: Vec<ApiThumbnail> = match user_id {
         None => vec![],
         Some(id) => db_lock.read().map_err(|_| anyhow!("Failed to acquire DatabaseState for reading"))?
             .db.thumbnails.values()
@@ -219,5 +222,6 @@ async fn get_thumbnails_by_user_id(db_lock: web::Data<RwLock<DatabaseState>>, st
     } else {
         StatusCode::OK
     };
+    titles.sort_by(|t1, t2| t1.time_submitted.cmp(&t2.time_submitted).reverse());
     Ok(web::Json(titles).customize().with_status(status))
 }
