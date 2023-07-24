@@ -1,13 +1,6 @@
 $gray: #333;
 $white: #eee;
 
-@font-face {
-  font-family: "Roboto";
-  src: 
-    local("Roboto"),
-    url("/fonts/Roboto-Regular.ttf") format("opentype");
-}
-
 %headercolors {
   background-color: #222;
 }
@@ -17,9 +10,9 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: #111111;
   color: $white;
-  background: #000;
-  font-family: "Roboto";
+  font-family: sans-serif;
 
   > * {
     padding: 1rem;
@@ -27,7 +20,8 @@ body {
 }
 
 #header {
-  height: min(10vh, 5rem);
+  background-color: #222222;
+  height: min(10vh, 3rem);
   @extend %headercolors;
   display: flex;
   flex-direction: row;
@@ -40,13 +34,16 @@ body {
   }
   
   h1 {
-    font-size: 3rem;
+    font-size: 2rem;
     margin: 0;
+  }
+
+  img {
+    max-height: min(10vh, 3rem);
   }
 }
 
 #searchbar {
-  background-color: #111;
   display: flex;
   flex-direction: row;
   justify-content: space-evenly;
@@ -115,8 +112,6 @@ body {
     }
 
     td {
-      text-align: center;
-      
       &.title-col {
         max-width: 40vw;
       }
@@ -162,17 +157,23 @@ body {
 }
 
 a {
-  color: lightblue;
-
-  &:visited {
-    color: lightpink;
-  }
+  color: #6E8CAA;
 }
 
 input, textarea {
-  color: $white;
-  background-color: $gray;
+  background-color: #111111;
+  color: #b1b1b1;
+  border-color: #8A8A8A;
   appearance: none;
   border: 1px solid $gray;
   border-radius: .25rem;
+}
+
+input::placeholder, textarea::placeholder {
+  color: #5a5a5a;
+}
+
+.icon-link {
+  margin-left: 0.5rem;
+  margin-right: 0.5rem;
 }
