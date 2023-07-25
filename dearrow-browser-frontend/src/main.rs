@@ -119,12 +119,12 @@ fn Header() -> Html {
     let window_context: Rc<WindowContext> = use_context().expect("WindowContext should be defined");
     let searchbar_visible = use_state_eq(|| true);
 
-    let toggle_searchbar = { 
+    /* let toggle_searchbar = {
         let searchbar_visible = searchbar_visible.clone();
         Callback::from(move |_| {
             searchbar_visible.set(!*searchbar_visible);
         })
-    };
+    }; */
     let uuid_search = {
         let navigator = navigator.clone();
         let searchbar_visible = searchbar_visible.clone();
@@ -169,10 +169,10 @@ fn Header() -> Html {
         <>
             <div id="header">
                 if let Some(url) = &window_context.logo_url {
-                    <img src={url} class="clickable" onclick={toggle_searchbar.clone()} ondblclick={go_home.clone()} />
+                    <img src={url} class="clickable" onclick={go_home.clone()} />
                 }
                 <div>
-                    <h1 class="clickable" onclick={toggle_searchbar} ondblclick={go_home.clone()}>{"DeArrow Browser"}</h1>
+                    <h1 class="clickable" onclick={go_home.clone()}>{"DeArrow Browser"}</h1>
                 </div>
             </div>
             if *searchbar_visible {

@@ -110,7 +110,7 @@ async fn get_errors(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonResult<Err
 async fn get_random_titles(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonResult<Vec<ApiTitle>> {
     let db = db_lock.read().map_err(|_| anyhow!("Failed to acquire DatabaseState for reading"))?;
     Ok(web::Json(
-        db.db.titles_by_time_submitted.iter().rev().take(20)
+        db.db.titles_by_time_submitted.iter().rev().take(50)
             .map(|t| t.into_with_db(&db.db)).collect()
     ))
 }
@@ -172,7 +172,7 @@ async fn get_titles_by_user_id(db_lock: web::Data<RwLock<DatabaseState>>, string
 async fn get_random_thumbnails(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonResult<Vec<ApiThumbnail>> {
     let db = db_lock.read().map_err(|_| anyhow!("Failed to acquire DatabaseState for reading"))?;
     Ok(web::Json(
-        db.db.thumbnails_by_time_submitted.iter().rev().take(20)
+        db.db.thumbnails_by_time_submitted.iter().rev().take(50)
             .map(|t| t.into_with_db(&db.db)).collect()
     ))
 }
