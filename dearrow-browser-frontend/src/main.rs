@@ -1,9 +1,9 @@
 use std::rc::Rc;
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use dearrow_browser_api::{StatusResponse, ApiThumbnail, ApiTitle};
 use reqwest::Url;
 use strum::IntoStaticStr;
-use yew::prelude::*;
+use yew::{prelude::*, suspense::SuspensionResult};
 use yew_hooks::{use_async_with_options, UseAsyncOptions, use_interval};
 use yew_router::prelude::*;
 use web_sys::{window, HtmlInputElement};
@@ -260,6 +260,7 @@ fn render_route(route: Route) -> Html {
 #[derive(Properties, PartialEq)]
 struct TableModeSwitchProps {
     state: UseStateHandle<DetailType>,
+    entry_count: Option<usize>,
 }
 
 #[function_component]
@@ -281,6 +282,15 @@ fn TableModeSwitch(props: &TableModeSwitchProps) -> Html {
         <div class="table-mode-switch">
             <span class="table-mode" onclick={set_titles_mode} selected={*props.state == DetailType::Title}>{"Titles"}</span>
             <span class="table-mode" onclick={set_thumbs_mode} selected={*props.state == DetailType::Thumbnail}>{"Thumbnails"}</span>
+            if let Some(count) = props.entry_count {
+                <span>
+                    if count == 1 {
+                        {"1 entry"}
+                    } else {
+                        {format!("{count} entries")}
+                    }
+                </span>
+            }
         </div>
     }
     
@@ -290,7 +300,9 @@ fn TableModeSwitch(props: &TableModeSwitchProps) -> Html {
 struct DetailTableRendererProps {
     url: Rc<Url>,
     mode: DetailType,
+    entry_count: Option<UseStateHandle<Option<usize>>>,
     hide_userid: Option<()>,
+    hide_username: Option<()>,
     hide_videoid: Option<()>,
 }
 
@@ -311,6 +323,9 @@ fn title_flags(title: &ApiTitle) -> Html {
             if title.locked {
                 <span title="This title was locked by a VIP">{"🔒"}</span>
             }
+            if title.vip {
+                <span title="This title was submitted by a VIP">{"👑"}</span>
+            }
             if title.shadow_hidden {
                 <span title="This title is shadowhidden">{"🚫"}</span>
             }
@@ -326,6 +341,9 @@ fn thumbnail_flags(thumb: &ApiThumbnail) -> Html {
             }
             if thumb.locked {
                 <span title="This thumbnail was locked by a VIP">{"🔒"}</span>
+            }
+            if thumb.vip {
+                <span title="This thumbnail was submitted by a VIP">{"👑"}</span>
             }
             if thumb.shadow_hidden {
                 <span title="This thumbnail is shadowhidden">{"🚫"}</span>
@@ -372,20 +390,42 @@ macro_rules! user_link {
     };
 }
 
+macro_rules! username_link {
+    ($username:expr) => {
+        if let Some(ref name) = $username {
+            html! {<textarea readonly=true ~value={name.to_string()} />}
+        } else {
+            html! {{"-"}}
+        }
+    };
+}
+
 #[function_component]
 fn DetailTableRenderer(props: &DetailTableRendererProps) -> HtmlResult {
     let app_context: Rc<AppContext> = use_context().expect("AppContext should be defined");
-    let details: Rc<Result<DetailList, anyhow::Error>> = use_async_suspension(|(mode, url, _)| async move {
-        let request = reqwest::get((*url).clone()).await?;
-        match mode {
-            DetailType::Thumbnail => Ok(DetailList::Thumbnails(request.json().await?)),
-            DetailType::Title => Ok(DetailList::Titles(request.json().await?)),
+    let details = { 
+        let result: SuspensionResult<Rc<Result<DetailList, anyhow::Error>>> = use_async_suspension(|(mode, url, _)| async move {
+            let request = reqwest::get((*url).clone()).await?;
+            match mode {
+                DetailType::Thumbnail => Ok(DetailList::Thumbnails(request.json().await?)),
+                DetailType::Title => Ok(DetailList::Titles(request.json().await?)),
+            }
+        }, (props.mode, props.url.clone(), app_context.last_updated));
+        if let Some(count) = &props.entry_count {
+            count.set(result.as_ref().ok().and_then(|r| r.as_ref().as_ref().ok()).map(|l| match l {
+                DetailList::Thumbnails(list) => list.len(),
+                DetailList::Titles(list) => list.len(),
+            }));
         }
-    }, (props.mode, props.url.clone(), app_context.last_updated))?;
+        result?
+    };
 
     Ok(match *details {
-        Err(..) => html! {
-            <center><b>{"Failed to fetch details from the API :/"}</b></center>
+        Err(ref e) => html! {
+            <center>
+                <b>{"Failed to fetch details from the API :/"}</b>
+                <pre>{format!("{e:?}")}</pre>
+            </center>
         },
         Ok(DetailList::Titles(ref list)) => html! {
             <table class="detail-table titles">
@@ -397,6 +437,9 @@ fn DetailTableRenderer(props: &DetailTableRendererProps) -> HtmlResult {
                     <th class="title-col">{"Title"}</th>
                     <th>{"Score/Votes"}</th>
                     <th>{"UUID"}</th>
+                    if props.hide_username.is_none() {
+                        <th>{"Username"}</th>
+                    }
                     if props.hide_userid.is_none() {
                         <th>{"User ID"}</th>
                     }
@@ -410,6 +453,9 @@ fn DetailTableRenderer(props: &DetailTableRendererProps) -> HtmlResult {
                         <td class="title-col">{t.title.clone()} {original_indicator!(t.original, title)}</td>
                         <td>{format!("{}/{}", t.score, t.votes)} {title_flags(t)}</td>
                         <td>{t.uuid.clone()}</td>
+                        if props.hide_username.is_none() {
+                            <td>{username_link!(t.username)}</td>
+                        }
                         if props.hide_userid.is_none() {
                             <td>{user_link!(t.user_id)}</td>
                         }
@@ -427,6 +473,9 @@ fn DetailTableRenderer(props: &DetailTableRendererProps) -> HtmlResult {
                     <th>{"Timestamp"}</th>
                     <th>{"Score/Votes"}</th>
                     <th>{"UUID"}</th>
+                    if props.hide_username.is_none() {
+                        <th>{"Username"}</th>
+                    }
                     if props.hide_userid.is_none() {
                         <th>{"User ID"}</th>
                     }
@@ -440,6 +489,9 @@ fn DetailTableRenderer(props: &DetailTableRendererProps) -> HtmlResult {
                         <td>{t.timestamp.map_or(original_indicator!(t.original, thumbnail), |ts| html! {{ts.to_string()}})}</td>
                         <td>{t.votes} {thumbnail_flags(t)}</td>
                         <td>{t.uuid.clone()}</td>
+                        if props.hide_username.is_none() {
+                            <td>{username_link!(t.username)}</td>
+                        }
                         if props.hide_userid.is_none() {
                             <td>{user_link!(t.user_id)}</td>
                         }
@@ -454,6 +506,7 @@ fn DetailTableRenderer(props: &DetailTableRendererProps) -> HtmlResult {
 fn HomePage() -> Html {
     let window_context: Rc<WindowContext> = use_context().expect("WindowContext should be defined");
     let table_mode = use_state_eq(|| DetailType::Title);
+    let entry_count = use_state_eq(|| None);
 
     let url = match *table_mode {
         DetailType::Title => window_context.origin.join("/api/titles"),
@@ -466,9 +519,9 @@ fn HomePage() -> Html {
     
     html! {
         <>
-            <TableModeSwitch state={table_mode.clone()} />
+            <TableModeSwitch state={table_mode.clone()} entry_count={*entry_count} />
             <Suspense {fallback}>
-                <DetailTableRenderer mode={*table_mode} url={Rc::new(url)} />
+                <DetailTableRenderer mode={*table_mode} url={Rc::new(url)} {entry_count} />
             </Suspense>
         </>
     }
@@ -483,6 +536,7 @@ struct VideoPageProps {
 fn VideoPage(props: &VideoPageProps) -> Html {
     let window_context: Rc<WindowContext> = use_context().expect("WindowContext should be defined");
     let table_mode = use_state_eq(|| DetailType::Title);
+    let entry_count = use_state_eq(|| None);
 
     let url = match *table_mode {
         DetailType::Title => window_context.origin.join(format!("/api/titles/video_id/{}", props.videoid).as_str()),
@@ -495,9 +549,9 @@ fn VideoPage(props: &VideoPageProps) -> Html {
     
     html! {
         <>
-            <TableModeSwitch state={table_mode.clone()} />
+            <TableModeSwitch state={table_mode.clone()} entry_count={*entry_count} />
             <Suspense {fallback}>
-                <DetailTableRenderer mode={*table_mode} url={Rc::new(url)} hide_videoid={()} />
+                <DetailTableRenderer mode={*table_mode} url={Rc::new(url)} {entry_count} hide_videoid={()} />
             </Suspense>
         </>
     }
@@ -512,6 +566,7 @@ struct UserPageProps {
 fn UserPage(props: &UserPageProps) -> Html {
     let window_context: Rc<WindowContext> = use_context().expect("WindowContext should be defined");
     let table_mode = use_state_eq(|| DetailType::Title);
+    let entry_count = use_state_eq(|| None);
 
     let url = match *table_mode {
         DetailType::Title => window_context.origin.join(format!("/api/titles/user_id/{}", props.userid).as_str()),
@@ -524,9 +579,9 @@ fn UserPage(props: &UserPageProps) -> Html {
     
     html! {
         <>
-            <TableModeSwitch state={table_mode.clone()} />
+            <TableModeSwitch state={table_mode.clone()} entry_count={*entry_count} />
             <Suspense {fallback}>
-                <DetailTableRenderer mode={*table_mode} url={Rc::new(url)} hide_userid={()} />
+                <DetailTableRenderer mode={*table_mode} url={Rc::new(url)} {entry_count} hide_userid={()} hide_username={()} />
             </Suspense>
         </>
     }
