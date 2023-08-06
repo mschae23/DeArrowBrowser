@@ -157,24 +157,24 @@ fn Header() -> Html {
             }
         })
     };
-    let go_home = {
+    /* let go_home = {
         let searchbar_visible = searchbar_visible.clone();
         Callback::from(move |_| {
             searchbar_visible.set(true);
             navigator.push(&Route::Home);
         })
-    };
+    }; */
 
     html! {
         <>
-            <div id="header">
-                if let Some(url) = &window_context.logo_url {
-                    <img src={url} class="clickable" onclick={go_home.clone()} />
+            <a id="header" class="clickable" href={window_context.origin.as_str().to_owned()}>
+                if let Some(logo_url) = &window_context.logo_url {
+                    <img src={logo_url} />
                 }
                 <div>
-                    <h1 class="clickable" onclick={go_home.clone()}>{"DeArrow Browser"}</h1>
+                    <h1 class="clickable">{"DeArrow Browser"}</h1>
                 </div>
-            </div>
+            </a>
             if *searchbar_visible {
                 <div id="searchbar">
                     {search_block!("uuid_search", "UUID", uuid_search)}

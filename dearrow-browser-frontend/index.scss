@@ -2,7 +2,7 @@ $gray: #333;
 $white: #eee;
 
 %headercolors {
-  background-color: #222;
+  background-color: #222222;
 }
 
 body {
@@ -19,10 +19,16 @@ body {
   }
 }
 
+a {
+  color: #6E8CAA;
+}
+
 #header {
-  background-color: #222222;
+  display: block;
   height: min(10vh, 3rem);
   @extend %headercolors;
+  color: inherit;
+  text-decoration: none;
   display: flex;
   flex-direction: row;
   gap: 2rem;
@@ -157,10 +163,6 @@ body {
 .icon-link, .icon-link a {
   text-decoration: none;
   color: inherit;
-}
-
-a {
-  color: #6E8CAA;
 }
 
 input, textarea {
