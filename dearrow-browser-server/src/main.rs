@@ -1,17 +1,18 @@
-use std::{sync::RwLock, fs::{File, Permissions, set_permissions}, io::{Read, Write, self}, os::unix::prelude::PermissionsExt};
+use std::{fs::{File, Permissions, set_permissions}, io::{self, Read, Write}, os::unix::prelude::PermissionsExt, sync::RwLock};
+
 use actix_files::{Files, NamedFile};
-use actix_web::{HttpServer, App, web, dev::{ServiceResponse, fn_service, ServiceRequest}};
-use anyhow::{Context, anyhow, bail};
+use actix_web::{App, dev::{fn_service, ServiceRequest, ServiceResponse}, HttpServer, web};
+use anyhow::{bail, Context};
 use chrono::Utc;
-use dearrow_parser::{DearrowDB, StringSet};
+use tokio_postgres::NoTls;
+
+use state::*;
 
 mod utils;
 mod routes;
 mod state;
-use state::*;
 
 const CONFIG_PATH: &str = "config.toml";
-
 
 #[actix_web::main]
 async fn main() -> anyhow::Result<()> {
@@ -36,18 +37,54 @@ async fn main() -> anyhow::Result<()> {
             return Err(e).context(format!("Failed to open {CONFIG_PATH}"));
         }
     });
-    let string_set = web::Data::new(RwLock::new(StringSet::with_capacity(16384)));
     let db: web::Data<RwLock<DatabaseState>> = {
-        let mut string_set = string_set.write().map_err(|_| anyhow!("Failed to aquire StringSet lock for writing"))?;
-        let (db, errors) = DearrowDB::load_dir(&config.mirror_path, &mut string_set).context("Initial DearrowDB load failed")?;
-        string_set.clean();
+        // Connect to the database.
+        let (client, connection) =
+            tokio_postgres::Config::new()
+                .host(&config.database_host).user(&config.database_user).password(&config.database_password).dbname(&config.database_name)
+                .connect(NoTls).await?;
+
+        // The connection object performs the actual communication with the database,
+        // so spawn it off to run on its own.
+        actix_web::rt::spawn(async move {
+            if let Err(e) = connection.await {
+                eprintln!("connection error: {}", e);
+            }
+        });
+
+        let index_titles = client.prepare("select t.\"UUID\", t.\"videoID\", t.\"title\", t.\"userID\", t.\"timeSubmitted\", tv.\"votes\", t.\"original\", tv.\"locked\", tv.\"shadowHidden\", tv.\"verification\", u.\"userName\", v.\"userID\" from \"titles\" t join \"titleVotes\" tv on t.\"UUID\" = tv.\"UUID\" left join \"userNames\" u on t.\"userID\" = u.\"userID\" left join \"vipUsers\" v on t.\"userID\" = v.\"userID\" order by t.\"timeSubmitted\" desc limit 50")
+            .await?;
+
+        let uuid_titles = client.prepare("select t.\"UUID\", t.\"videoID\", t.\"title\", t.\"userID\", t.\"timeSubmitted\", tv.\"votes\", t.\"original\", tv.\"locked\", tv.\"shadowHidden\", tv.\"verification\", u.\"userName\", v.\"userID\" from \"titles\" t join \"titleVotes\" tv on t.\"UUID\" = tv.\"UUID\" left join \"userNames\" u on t.\"userID\" = u.\"userID\" left join \"vipUsers\" v on t.\"userID\" = v.\"userID\" where t.\"UUID\" = $1 limit 1")
+            .await?;
+
+        let video_titles = client.prepare("select t.\"UUID\", t.\"videoID\", t.\"title\", t.\"userID\", t.\"timeSubmitted\", tv.\"votes\", t.\"original\", tv.\"locked\", tv.\"shadowHidden\", tv.\"verification\", u.\"userName\", v.\"userID\" from \"titles\" t join \"titleVotes\" tv on t.\"UUID\" = tv.\"UUID\" left join \"userNames\" u on t.\"userID\" = u.\"userID\" left join \"vipUsers\" v on t.\"userID\" = v.\"userID\" where t.\"videoID\" = $1 order by t.\"timeSubmitted\"")
+            .await?;
+
+        let user_titles = client.prepare("select t.\"UUID\", t.\"videoID\", t.\"title\", t.\"userID\", t.\"timeSubmitted\", tv.\"votes\", t.\"original\", tv.\"locked\", tv.\"shadowHidden\", tv.\"verification\", u.\"userName\", v.\"userID\" from \"titles\" t join \"titleVotes\" tv on t.\"UUID\" = tv.\"UUID\" left join \"userNames\" u on t.\"userID\" = u.\"userID\" left join \"vipUsers\" v on t.\"userID\" = v.\"userID\" where t.\"userID\" = $1 order by t.\"timeSubmitted\"")
+            .await?;
+
+        let index_thumbnails = client.prepare("select t.\"UUID\", t.\"videoID\", t.\"userID\", t.\"timeSubmitted\", tt.\"timestamp\", tv.\"votes\", t.\"original\", tv.\"locked\", tv.\"shadowHidden\", u.\"userName\", v.\"userID\" from \"thumbnails\" t join \"thumbnailVotes\" tv on t.\"UUID\" = tv.\"UUID\" left join \"thumbnailTimestamps\" tt on t.\"UUID\" = tt.\"UUID\" left join \"userNames\" u on t.\"userID\" = u.\"userID\" left join \"vipUsers\" v on t.\"userID\" = v.\"userID\" order by t.\"timeSubmitted\" desc limit 50")
+            .await?;
+
+        let uuid_thumbnails = client.prepare("select t.\"UUID\", t.\"videoID\", t.\"userID\", t.\"timeSubmitted\", tt.\"timestamp\", tv.\"votes\", t.\"original\", tv.\"locked\", tv.\"shadowHidden\", u.\"userName\", v.\"userID\" from \"thumbnails\" t join \"thumbnailVotes\" tv on t.\"UUID\" = tv.\"UUID\" left join \"thumbnailTimestamps\" tt on t.\"UUID\" = tt.\"UUID\" left join \"userNames\" u on t.\"userID\" = u.\"userID\" left join \"vipUsers\" v on t.\"userID\" = v.\"userID\" where t.\"UUID\" = $1 limit 1")
+            .await?;
+
+        let video_thumbnails = client.prepare("select t.\"UUID\", t.\"videoID\", t.\"userID\", t.\"timeSubmitted\", tt.\"timestamp\", tv.\"votes\", t.\"original\", tv.\"locked\", tv.\"shadowHidden\", u.\"userName\", v.\"userID\" from \"thumbnails\" t join \"thumbnailVotes\" tv on t.\"UUID\" = tv.\"UUID\" left join \"thumbnailTimestamps\" tt on t.\"UUID\" = tt.\"UUID\" left join \"userNames\" u on t.\"userID\" = u.\"userID\" left join \"vipUsers\" v on t.\"userID\" = v.\"userID\" where t.\"videoID\" = $1 order by t.\"timeSubmitted\"")
+            .await?;
+
+        let user_thumbnails = client.prepare("select t.\"UUID\", t.\"videoID\", t.\"userID\", t.\"timeSubmitted\", tt.\"timestamp\", tv.\"votes\", t.\"original\", tv.\"locked\", tv.\"shadowHidden\", u.\"userName\", v.\"userID\" from \"thumbnails\" t join \"thumbnailVotes\" tv on t.\"UUID\" = tv.\"UUID\" left join \"thumbnailTimestamps\" tt on t.\"UUID\" = tt.\"UUID\" left join \"userNames\" u on t.\"userID\" = u.\"userID\" left join \"vipUsers\" v on t.\"userID\" = v.\"userID\" where t.\"userID\" = $1 order by t.\"timeSubmitted\"")
+            .await?;
 
         web::Data::new(RwLock::new(DatabaseState {
-            db,
+            db: client,
+            statements: PreparedQueries {
+                index_titles, uuid_titles, video_titles, user_titles,
+                index_thumbnails, uuid_thumbnails, video_thumbnails, user_thumbnails,
+            },
             last_error: None,
-            errors: errors.into(),
             last_updated: Utc::now().timestamp_millis(),
-            last_modified: utils::get_mtime(&config.mirror_path.join("titles.csv")),
+            last_modified: utils::get_mtime(&config.mirror_path.join("last-modified")),
             updating_now: false
         }))
     };
@@ -61,7 +98,6 @@ async fn main() -> anyhow::Result<()> {
                     .configure(routes::configure_routes)
                     .app_data(config.clone())
                     .app_data(db.clone())
-                    .app_data(string_set.clone())
                 )
                 .service(
                     Files::new("/", config.static_content_path.as_path())

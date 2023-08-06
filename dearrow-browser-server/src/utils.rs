@@ -1,8 +1,10 @@
 use std::{fmt::{Debug, Display}, path::Path, fs, time::UNIX_EPOCH};
+use std::sync::Arc;
 
 use actix_web::{ResponseError, http::{StatusCode, header::ContentType}, HttpResponse};
 use sha2::{Sha256, Digest, digest::{typenum::U32, generic_array::GenericArray}};
-
+use tokio_postgres::Row;
+use dearrow_browser_api::{ApiThumbnail, ApiTitle};
 
 pub enum Error {
     Anyhow(anyhow::Error),
@@ -64,3 +66,36 @@ pub fn get_mtime(p: &Path) -> i64 {
         .unwrap_or(0)
 }
 
+pub fn parse_api_title_from_database_row(row: Row) -> ApiTitle {
+    ApiTitle {
+        uuid: Arc::from(row.get::<usize, String>(0)),
+        video_id: Arc::from(row.get::<usize, String>(1)),
+        title: Arc::from(row.get::<usize, String>(2)),
+        user_id: Arc::from(row.get::<usize, String>(3)),
+        time_submitted: row.get::<usize, i64>(4),
+        votes: row.get::<usize, i32>(5),
+        original: row.get::<usize, i32>(6) != 0,
+        locked: row.get::<usize, i32>(7) != 0,
+        shadow_hidden: row.get::<usize, i32>(8) != 0,
+        unverified: row.get::<usize, i32>(9) != 0,
+        score: (row.get::<usize, i32>(5) + row.get::<usize, i32>(9)),
+        username: row.get::<usize, Option<String>>(10).map(Arc::from),
+        vip: row.get::<usize, Option<String>>(11).is_some(),
+    }
+}
+
+pub fn parse_api_thumbnail_from_database_row(row: Row) -> ApiThumbnail {
+    ApiThumbnail {
+        uuid: Arc::from(row.get::<usize, String>(0)),
+        video_id: Arc::from(row.get::<usize, String>(1)),
+        user_id: Arc::from(row.get::<usize, String>(2)),
+        time_submitted: row.get::<usize, i64>(3),
+        timestamp: row.get::<usize, Option<f64>>(4),
+        votes: row.get::<usize, i32>(5),
+        original: row.get::<usize, i32>(6) != 0,
+        locked: row.get::<usize, i32>(7) != 0,
+        shadow_hidden: row.get::<usize, i32>(8) != 0,
+        username: row.get::<usize, Option<String>>(9).map(Arc::from),
+        vip: row.get::<usize, Option<String>>(10).is_some(),
+    }
+}

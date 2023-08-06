@@ -28,7 +28,7 @@ pub struct Thumbnail {
     pub user_id: Arc<str>,
     pub time_submitted: i64,
     pub timestamp: Option<f64>,
-    pub votes: i8,
+    pub votes: i32,
     pub flags: ThumbnailFlags,
 }
 
@@ -39,7 +39,7 @@ pub struct Title {
     pub title: Arc<str>,
     pub user_id: Arc<str>,
     pub time_submitted: i64,
-    pub votes: i8,
+    pub votes: i32,
     pub flags: TitleFlags,
 }
 
@@ -108,7 +108,7 @@ pub enum ParseErrorKind {
     InvalidValue {
         uuid: Arc<str>,
         field: &'static str,
-        value: i8,
+        value: i32,
     },
     MismatchedUUIDs {
         struct_name: &'static str,
@@ -372,6 +372,7 @@ impl DearrowDB {
 
 mod csv_data {
     use std::sync::Arc;
+    use bitflags::Flags;
     use serde::Deserialize;
     use super::{ParseError, ObjectKind, ParseErrorKind, ThumbnailFlags, TitleFlags, StringSet, Dedupe};
 
@@ -381,7 +382,7 @@ mod csv_data {
     pub struct Thumbnail {
         #[serde(rename="videoID")]
         video_id: Arc<str>,
-        original: i8,
+        original: i32,
         #[serde(rename="userID")]
         user_id: Arc<str>,
         #[serde(rename="timeSubmitted")]
@@ -401,10 +402,10 @@ mod csv_data {
     pub struct ThumbnailVotes {
         #[serde(rename="UUID")]
         pub uuid: Arc<str>,
-        votes: i8,
-        locked: i8,
+        votes: i32,
+        locked: i32,
         #[serde(rename="shadowHidden")]
-        shadow_hidden: i8,
+        shadow_hidden: i32,
     }
 
     #[derive(Deserialize)]
@@ -412,7 +413,7 @@ mod csv_data {
         #[serde(rename="videoID")]
         video_id: Arc<str>,
         title: Arc<str>,
-        original: i8,
+        original: i32,
         #[serde(rename="userID")]
         user_id: Arc<str>,
         #[serde(rename="timeSubmitted")]
@@ -425,11 +426,11 @@ mod csv_data {
     pub struct TitleVotes {
         #[serde(rename="UUID")]
         pub uuid: Arc<str>,
-        votes: i8,
-        locked: i8,
+        votes: i32,
+        locked: i32,
         #[serde(rename="shadowHidden")]
-        shadow_hidden: i8,
-        verification: i8,
+        shadow_hidden: i32,
+        verification: i32,
     }
 
     #[derive(Deserialize)]
@@ -444,7 +445,7 @@ mod csv_data {
         pub user_id: Arc<str>,
         #[serde(rename="userName")]
         pub username: Arc<str>,
-        pub locked: i8,
+        pub locked: i32,
     }
 
     macro_rules! intbool {
