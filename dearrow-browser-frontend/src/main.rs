@@ -7,6 +7,7 @@ use yew::{prelude::*, suspense::SuspensionResult};
 use yew_hooks::{use_async_with_options, UseAsyncOptions, use_interval};
 use yew_router::prelude::*;
 use web_sys::{window, HtmlInputElement};
+use gloo_console::error;
 
 mod hooks;
 mod utils;
@@ -22,6 +23,8 @@ enum Route {
     Video { id: String },
     #[at("/user_id/:id")]
     User { id: String },
+    #[at("/wip")]
+    NotImplemented,
     #[not_found]
     #[at("/404")]
     NotFound,
@@ -114,75 +117,75 @@ macro_rules! search_block {
 }
 
 #[function_component]
-fn Header() -> Html {
+fn Searchbar() -> Html {
     let navigator = use_navigator().expect("navigator should exist");
     let window_context: Rc<WindowContext> = use_context().expect("WindowContext should be defined");
-    let searchbar_visible = use_state_eq(|| true);
-
-    /* let toggle_searchbar = {
-        let searchbar_visible = searchbar_visible.clone();
-        Callback::from(move |_| {
-            searchbar_visible.set(!*searchbar_visible);
-        })
-    }; */
     let uuid_search = {
         let navigator = navigator.clone();
-        let searchbar_visible = searchbar_visible.clone();
         Callback::from(move |e: KeyboardEvent| {
             if e.key() == "Enter" {
-                searchbar_visible.set(false);
-                navigator.push(&Route::NotFound);
+                navigator.push(&Route::NotImplemented);
             }
         })
     };
     let uid_search = {
         let navigator = navigator.clone();
-        let searchbar_visible = searchbar_visible.clone();
         Callback::from(move |e: KeyboardEvent| {
             if e.key() == "Enter" {
                 let input: HtmlInputElement = e.target_unchecked_into();
-                searchbar_visible.set(false);
                 navigator.push(&Route::User {id: input.value()});
             }
         })
     };
-    let vid_search = { 
-        let navigator = navigator.clone();
-        let searchbar_visible = searchbar_visible.clone();
+    let vid_search = {
         Callback::from(move |e: KeyboardEvent| {
             if e.key() == "Enter" {
                 let input: HtmlInputElement = e.target_unchecked_into();
-                searchbar_visible.set(false);
-                navigator.push(&Route::Video { id: input.value() });
+                let value = input.value();
+                navigator.push(&Route::Video {
+                    id: if let Ok(url) = Url::parse(&value) {
+                        if url.host_str() == Some("youtu.be") {
+                            url.path_segments().and_then(|mut s| s.next()).unwrap_or(value.as_str()).to_string()
+                        } else {
+                            url.query_pairs().find(|(ref k, _)| k == "v").map(|(_, v)| v.to_string()).unwrap_or(value)
+                        }
+                    } else {
+                        value
+                    }
+                });
             }
         })
     };
-    /* let go_home = {
-        let searchbar_visible = searchbar_visible.clone();
-        Callback::from(move |_| {
-            searchbar_visible.set(true);
-            navigator.push(&Route::Home);
-        })
-    }; */
 
     html! {
-        <>
-            <a id="header" class="clickable" href={window_context.origin.as_str().to_owned()}>
-                if let Some(logo_url) = &window_context.logo_url {
-                    <img src={logo_url} />
-                }
-                <div>
-                    <h1 class="clickable">{"DeArrow Browser"}</h1>
-                </div>
-            </a>
-            if *searchbar_visible {
-                <div id="searchbar">
-                    {search_block!("uuid_search", "UUID", uuid_search)}
-                    {search_block!("vid_search", "Video ID", vid_search)}
-                    {search_block!("uid_search", "User ID", uid_search)}
-                </div>
+        <div id="searchbar">
+            {search_block!("uuid_search", "UUID", uuid_search)}
+            {search_block!("vid_search", "Video ID", vid_search)}
+            {search_block!("uid_search", "User ID", uid_search)}
+        </div>
+    }
+}
+
+#[function_component]
+fn Header() -> Html {
+    let navigator = use_navigator().expect("navigator should exist");
+    let window_context: Rc<WindowContext> = use_context().expect("WindowContext should be defined");
+
+    let go_home = {
+        Callback::from(move |_| {
+            navigator.push(&Route::Home);
+        })
+    };
+
+    html! {
+        <a id="header" class="clickable" href={window_context.origin.as_str().to_owned()}>
+            if let Some(url) = &window_context.logo_url {
+                <img src={url} class="clickable" onclick={go_home.clone()} />
             }
-        </>
+            <div>
+                <h1 class="clickable" onclick={go_home}>{"DeArrow Browser"}</h1>
+            </div>
+        </a>
     }
 }
 
@@ -235,8 +238,8 @@ fn Footer() -> Html {
 fn render_route(route: Route) -> Html {
     let route_html = match route {
         Route::Home => html! {<HomePage></HomePage>},
-        Route::Video { ref id } => html! {<VideoPage videoid={id.clone()}></VideoPage>},
-        Route::User { ref id } => html! {<UserPage userid={id.clone()}></UserPage>},
+        Route::Video { ref id } => html! {<VideoPage videoid={id.clone()} />},
+        Route::User { ref id } => html! {<UserPage userid={id.clone()} />},
         Route::NotFound => html! {
             <>
                 <h2>{"404 - Not found"}</h2>
@@ -244,8 +247,15 @@ fn render_route(route: Route) -> Html {
                 <Link<Route> to={Route::Home}>{"Return to home page"}</Link<Route>>
             </>
         },
+        Route::NotImplemented => html! {
+            <>
+                <h2>{"Not implemented"}</h2>
+                <h3>{"This feature is not implemented yet"}</h3>
+                <Link<Route> to={Route::Home}>{"Return to home page"}</Link<Route>>
+            </>
+        },
     };
-    let route_name: &'static str = route.into();
+    let route_name: &'static str = (&route).into();
     html! {
         <>
             <Header />
@@ -406,10 +416,16 @@ fn DetailTableRenderer(props: &DetailTableRendererProps) -> HtmlResult {
     let details = { 
         let result: SuspensionResult<Rc<Result<DetailList, anyhow::Error>>> = use_async_suspension(|(mode, url, _)| async move {
             let request = reqwest::get((*url).clone()).await?;
-            match mode {
-                DetailType::Thumbnail => Ok(DetailList::Thumbnails(request.json().await?)),
-                DetailType::Title => Ok(DetailList::Titles(request.json().await?)),
-            }
+            let mut result = match mode {
+                DetailType::Thumbnail => DetailList::Thumbnails(request.json().await?),
+                DetailType::Title => DetailList::Titles(request.json().await?),
+            };
+            // Sort by time submited, most to least recent
+            match result {
+                DetailList::Thumbnails(ref mut list) => list.sort_unstable_by(|a, b| b.time_submitted.cmp(&a.time_submitted)),
+                DetailList::Titles(ref mut list) => list.sort_unstable_by(|a, b| b.time_submitted.cmp(&a.time_submitted)),
+            };
+            Ok(result)
         }, (props.mode, props.url.clone(), app_context.last_updated));
         if let Some(count) = &props.entry_count {
             count.set(result.as_ref().ok().and_then(|r| r.as_ref().as_ref().ok()).map(|l| match l {
@@ -519,11 +535,58 @@ fn HomePage() -> Html {
     
     html! {
         <>
+            <div id="page-details">
+                <Searchbar />
+            </div>
             <TableModeSwitch state={table_mode.clone()} entry_count={*entry_count} />
             <Suspense {fallback}>
                 <DetailTableRenderer mode={*table_mode} url={Rc::new(url)} {entry_count} />
             </Suspense>
         </>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct OriginalTitleProps {
+    videoid: AttrValue,
+}
+
+#[function_component]
+fn OriginalTitle(props: &OriginalTitleProps) -> HtmlResult {
+    let title = use_async_suspension(|vid| async move {
+        let result = utils::get_original_title(vid.to_string()).await;
+        if let Err(ref e) = result {
+            error!(format!("Failed to fetch original title for video {vid}: {e:?}"));
+        }
+        result
+    }, props.videoid.clone())?;
+    if let Ok(ref t) = *title {
+        Ok(html!{<span>{t.as_str()}</span>})
+    } else {
+        Ok(html!{<span><em>{"Failed to fetch original title"}</em></span>})
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct VideoDetailsTableProps {
+    videoid: AttrValue,
+    mode: DetailType,
+}
+
+#[function_component]
+fn VideoDetailsTable(props: &VideoDetailsTableProps) -> Html {
+    let fallback = html!{
+        <span><em>{"Loading..."}</em></span>
+    };
+    html! {
+        <div id="details-table">
+            <div>{format!("Video ID: {}", props.videoid)}</div>
+            <div hidden={props.mode != DetailType::Title}>
+                {"Original title: "}
+                <Suspense {fallback}><OriginalTitle videoid={props.videoid.clone()} /></Suspense>
+            </div>
+            <div><a href={format!("https://youtu.be/{}", props.videoid)}>{"View on YouTube"}</a></div>
+        </div>
     }
 }
 
@@ -549,6 +612,10 @@ fn VideoPage(props: &VideoPageProps) -> Html {
     
     html! {
         <>
+            <div id="page-details">
+                <iframe src={format!("https://youtube.com/embed/{}", props.videoid)} allowfullscreen=true />
+                <VideoDetailsTable videoid={props.videoid.clone()} mode={*table_mode} />
+            </div>
             <TableModeSwitch state={table_mode.clone()} entry_count={*entry_count} />
             <Suspense {fallback}>
                 <DetailTableRenderer mode={*table_mode} url={Rc::new(url)} {entry_count} hide_videoid={()} />
