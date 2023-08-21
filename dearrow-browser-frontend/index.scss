@@ -106,7 +106,7 @@ a {
     }
   }
 
-  &[data-route="Home"], &[data-route="Video"], &[data-route="User"] {
+  &[data-route="Home"], &[data-route="Video"], &[data-route="User"], &[data-route="Unverified"] {
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
