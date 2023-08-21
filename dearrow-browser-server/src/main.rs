@@ -41,18 +41,21 @@ async fn main() -> anyhow::Result<()> {
         // Connect to the database.
         let (client, connection) =
             tokio_postgres::Config::new()
-                .host(&config.database_host).user(&config.database_user).password(&config.database_password).dbname(&config.database_name)
+                .host(&config.database.host).user(&config.database.user).password(&config.database.password).dbname(&config.database.name)
                 .connect(NoTls).await?;
 
         // The connection object performs the actual communication with the database,
         // so spawn it off to run on its own.
         actix_web::rt::spawn(async move {
             if let Err(e) = connection.await {
-                eprintln!("connection error: {}", e);
+                eprintln!("Connection error: {}", e);
             }
         });
 
         let index_titles = client.prepare("select t.\"UUID\", t.\"videoID\", t.\"title\", t.\"userID\", t.\"timeSubmitted\", tv.\"votes\", t.\"original\", tv.\"locked\", tv.\"shadowHidden\", tv.\"verification\", u.\"userName\", v.\"userID\" from \"titles\" t join \"titleVotes\" tv on t.\"UUID\" = tv.\"UUID\" left join \"userNames\" u on t.\"userID\" = u.\"userID\" left join \"vipUsers\" v on t.\"userID\" = v.\"userID\" order by t.\"timeSubmitted\" desc limit 50")
+            .await?;
+
+        let unverified_titles = client.prepare("select t.\"UUID\", t.\"videoID\", t.\"title\", t.\"userID\", t.\"timeSubmitted\", tv.\"votes\", t.\"original\", tv.\"locked\", tv.\"shadowHidden\", tv.\"verification\", u.\"userName\", v.\"userID\" from \"titles\" t join \"titleVotes\" tv on t.\"UUID\" = tv.\"UUID\" left join \"userNames\" u on t.\"userID\" = u.\"userID\" left join \"vipUsers\" v on t.\"userID\" = v.\"userID\" where tv.\"verification\" = -1 and tv.\"locked\" != 1 and tv.\"shadowHidden\" != 1 order by t.\"timeSubmitted\"")
             .await?;
 
         let uuid_titles = client.prepare("select t.\"UUID\", t.\"videoID\", t.\"title\", t.\"userID\", t.\"timeSubmitted\", tv.\"votes\", t.\"original\", tv.\"locked\", tv.\"shadowHidden\", tv.\"verification\", u.\"userName\", v.\"userID\" from \"titles\" t join \"titleVotes\" tv on t.\"UUID\" = tv.\"UUID\" left join \"userNames\" u on t.\"userID\" = u.\"userID\" left join \"vipUsers\" v on t.\"userID\" = v.\"userID\" where t.\"UUID\" = $1 limit 1")
@@ -79,7 +82,7 @@ async fn main() -> anyhow::Result<()> {
         web::Data::new(RwLock::new(DatabaseState {
             db: client,
             statements: PreparedQueries {
-                index_titles, uuid_titles, video_titles, user_titles,
+                index_titles, unverified_titles, uuid_titles, video_titles, user_titles,
                 index_thumbnails, uuid_thumbnails, video_thumbnails, user_thumbnails,
             },
             last_error: None,

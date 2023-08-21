@@ -11,17 +11,17 @@ use crate::{state::*, utils};
 
 pub fn configure_routes(cfg: &mut web::ServiceConfig) {
     cfg.service(helo)
-       .service(get_random_titles)
+       .service(get_latest_titles)
        .service(get_unverified_titles)
        .service(get_title_by_uuid)
        .service(get_titles_by_video_id)
        .service(get_titles_by_user_id)
-       .service(get_random_thumbnails)
+       .service(get_latest_thumbnails)
        .service(get_thumbnail_by_uuid)
        .service(get_thumbnails_by_video_id)
        .service(get_thumbnails_by_user_id)
        .service(get_status)
-       .service(request_reload);;
+       .service(request_reload);
 }
 
 type JsonResult<T> = utils::Result<web::Json<T>>;
@@ -89,7 +89,7 @@ async fn request_reload(db_lock: web::Data<RwLock<DatabaseState>>, config: web::
 }
 
 #[get("/titles")]
-async fn get_random_titles(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonResult<Vec<ApiTitle>> {
+async fn get_latest_titles(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonResult<Vec<ApiTitle>> {
     let db = db_lock.read().map_err(|_| anyhow!("Failed to acquire DatabaseState for reading"))?;
     let titles = db.db.query(&db.statements.index_titles, &[]).await.map_err(|err| anyhow!("Failed to query database: {}", err))?.into_iter()
         .map(utils::parse_api_title_from_database_row).collect();
@@ -99,11 +99,9 @@ async fn get_random_titles(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonRes
 #[get("/titles/unverified")]
 async fn get_unverified_titles(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonResult<Vec<ApiTitle>> {
     let db = db_lock.read().map_err(|_| anyhow!("Failed to acquire DatabaseState for reading"))?;
-    Ok(web::Json(
-        db.db.titles.values()
-            .filter(|t| t.flags.contains(TitleFlags::Unverified) && !t.flags.intersects(TitleFlags::Locked | TitleFlags::ShadowHidden))
-            .map(|t| t.into_with_db(&db.db)).collect()
-    ))
+    let titles = db.db.query(&db.statements.unverified_titles, &[]).await.map_err(|err| anyhow!("Failed to query database: {}", err))?.into_iter()
+        .map(utils::parse_api_title_from_database_row).collect();
+    Ok(web::Json(titles))
 }
 
 #[get("/titles/uuid/{uuid}")]
@@ -148,7 +146,7 @@ async fn get_titles_by_user_id(db_lock: web::Data<RwLock<DatabaseState>>, path: 
 }
 
 #[get("/thumbnails")]
-async fn get_random_thumbnails(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonResult<Vec<ApiThumbnail>> {
+async fn get_latest_thumbnails(db_lock: web::Data<RwLock<DatabaseState>>) -> JsonResult<Vec<ApiThumbnail>> {
     let db = db_lock.read().map_err(|_| anyhow!("Failed to acquire DatabaseState for reading"))?;
     let thumbnails = db.db.query(&db.statements.index_thumbnails, &[]).await.map_err(|err| anyhow!("Failed to query database: {}", err))?.into_iter()
         .map(utils::parse_api_thumbnail_from_database_row).collect();

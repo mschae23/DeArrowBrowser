@@ -11,10 +11,26 @@ pub struct AppConfig {
     pub static_content_path: PathBuf,
     pub listen: ListenConfig,
     pub auth_secret: String,
-    pub database_host: String,
-    pub database_user: String,
-    pub database_password: String,
-    pub database_name: String,
+    pub database: DatabaseConfig,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct DatabaseConfig {
+    pub host: String,
+    pub user: String,
+    pub password: String,
+    pub name: String,
+}
+
+impl Default for DatabaseConfig {
+    fn default() -> Self {
+        DatabaseConfig {
+            host: String::from("localhost"),
+            user: String::from("sponsortimes"),
+            password: String::from(""),
+            name: String::from("sponsortimes"),
+        }
+    }
 }
 
 impl Default for AppConfig {
@@ -26,10 +42,7 @@ impl Default for AppConfig {
             static_content_path: PathBuf::from("./static"),
             listen: ListenConfig::default(),
             auth_secret: URL_SAFE_NO_PAD.encode(buffer),
-            database_host: String::from("localhost"),
-            database_user: String::from("sponsortimes"),
-            database_password: String::from(""),
-            database_name: String::from("sponsortimes"),
+            database: DatabaseConfig::default(),
         }
     }
 }
@@ -53,6 +66,7 @@ impl Default for ListenConfig {
 
 pub struct PreparedQueries {
     pub index_titles: Statement,
+    pub unverified_titles: Statement,
     pub uuid_titles: Statement,
     pub video_titles: Statement,
     pub user_titles: Statement,
