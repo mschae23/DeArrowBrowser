@@ -23,5 +23,5 @@ string = []
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dearrow-parser = { path = "../dearrow-parser", optional = true }
+dearrow-parser = { version = "1.14.0", registry = "mschae23", optional = true }
 serde.workspace = true
